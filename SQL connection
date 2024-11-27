@@ -1,0 +1,71 @@
+# importing mysql.connector 
+
+import pandas as pd
+import psycopg2
+
+
+df = pd.read_csv(r'C:\Users\jayav\Downloads\Redbus_data.csv')
+df
+
+
+# SQL connection
+
+client = psycopg2.connect(host="localhost",
+                          user="postgres",
+                          password="varsha",
+                          database="redbus",
+                          port="5432")
+print("Connection successful!")
+cursor = client.cursor()
+
+# SQL query to create table
+
+cursor.execute('''CREATE TABLE IF NOT EXISTS redbus(
+                  State_name TEXT,
+                  Bus_name TEXT,
+                  Bus_type TEXT,
+                  Departure TIME,
+                  Arrival TIME,
+                  Duration TEXT,
+                  Price DECIMAL(10, 2),
+                  Ratings FLOAT,
+                  Seats_Available INT,
+                  Route_link TEXT,
+                  Route_name TEXT  
+                  )''')
+
+print("Table Created successfully")
+
+# SQL query to insert data into Red_bus table
+
+insert_query = '''INSERT INTO redbus(
+                  State_name,
+                  Bus_name,
+                  Bus_type,
+                  Departure,
+                  Arrival,
+                  Duration,
+                  Price,
+                  Ratings,
+                  Seats_Available,
+                  Route_link,
+                  Route_name  
+                  )
+                  VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+
+data = df.values.tolist()
+
+cursor.executemany(insert_query, data)
+
+client.commit()
+
+print("Values inserted successfully")
+
+# SQL query to show data in table
+
+query = "select * from redbus"
+cursor.execute(query)
+
+for data in cursor:
+    print(data)
+
