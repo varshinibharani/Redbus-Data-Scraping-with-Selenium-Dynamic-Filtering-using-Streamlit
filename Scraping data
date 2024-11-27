@@ -1,0 +1,222 @@
+import time
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver import ActionChains as AC
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.support import expected_conditions as EC
+
+
+# Create a function to get bus details from their respective route names and links
+def get_route_links_and_names(name, url, pages, path):
+    driver = webdriver.Chrome()
+    driver.get(url)
+    time.sleep(2)  # Wait for the page to load
+    driver.maximize_window()
+    
+    # Create empty lists to store route name and link details
+    links = []
+    routes = []
+    
+    wait = WebDriverWait(driver, 10) # Wait for the page to load it's contents
+    
+    for i in range(1, pages + 1):
+        elements = driver.find_elements(By.XPATH, path)
+            
+        for element in elements:
+            links.append(element.get_attribute("href"))
+            routes.append(element.text)
+        
+        try:
+            # wait until the required element is located
+            pagination_container = wait.until(EC.presence_of_element_located((By.XPATH, '//*[@class="DC_117_paginationTable"]')))
+            next_pg_btn = pagination_container.find_element(By.XPATH, f'//div[@class="DC_117_pageTabs " and text()="{i+1}"]')
+            
+            AC(driver).move_to_element(next_pg_btn).perform() # move the cursor onto the element
+            time.sleep(2)
+            
+            next_pg_btn.click() # click the element to load the next page
+            time.sleep(2)  
+                
+        except NoSuchElementException:
+            print("No more pages to paginate")
+            break
+            
+    driver.quit()
+
+    driver = webdriver.Chrome()
+
+    # Create empty lists to store required bus details
+    Bus_names = []
+    Bus_types = []
+    Departure = []
+    Arrival = []
+    Ratings = []
+    Duration = []
+    Price = []
+    Seats_available = []
+    Route_names = []
+    Route_links = []
+
+    # Loop through each link to get respective bus details 
+    for link, route in zip(links, routes):
+        driver.get(link)
+        driver.maximize_window()
+        time.sleep(2)
+    
+        # Click on each element to show respective bus details
+        elements = driver.find_elements(By.XPATH, f"//a[contains(@href, '{link}')]")
+        for element in elements:
+            element.click()
+            time.sleep(5)
+    
+        # Find and Click the view bus element
+        try:
+            clicks = driver.find_element(By.XPATH, "//div[@class='button']")
+            clicks.click() 
+            time.sleep(5)
+    
+            # Scroll through the entire page
+            scrolling = True
+            while scrolling:
+                old_pg_src = driver.page_source # gives the current page location before scrolling
+                
+                AC(driver).send_keys(Keys.END).perform() # goes to the end of the page
+                time.sleep(5)
+                
+                new_pg_src = driver.page_source # gives the current page location after scrolling 
+                
+                if new_pg_src == old_pg_src:
+                    scrolling = False
+                    
+        # If element not found            
+        except NoSuchElementException:
+
+            #  Scroll through the entire page
+            scrolling = True
+            while scrolling:
+                old_pg_src = driver.page_source # gives the current page location before scrolling
+                
+                AC(driver).send_keys(Keys.END).perform() # goes to the end of the page
+                time.sleep(5)
+                
+                new_pg_src = driver.page_source # gives the current page location after scrolling
+                
+                if new_pg_src == old_pg_src:
+                    scrolling = False
+
+        # Extract the required bus deatils
+        bus_name = driver.find_elements(By.XPATH, "//div[@class='travels lh-24 f-bold d-color']")
+        bus_type = driver.find_elements(By.XPATH, "//div[@class='bus-type f-12 m-top-16 l-color evBus']")
+        departure = driver.find_elements(By.XPATH, "//*[@class='dp-time f-19 d-color f-bold']")
+        arrival = driver.find_elements(By.XPATH, "//*[@class='bp-time f-19 d-color disp-Inline']")
+        duration = driver.find_elements(By.XPATH, "//*[@class='dur l-color lh-24']")
+        rating = driver.find_elements(By.XPATH, "//div[@class='clearfix row-one']/div[@class='column-six p-right-10 w-10 fl']")
+        price = driver.find_elements(By.XPATH, "//*[@class='fare d-block']")
+        seats = driver.find_elements(By.XPATH, "//div[contains(@class, 'seat-left')]")
+    
+        # Append data to respective lists
+        for bus in bus_name:
+            Bus_names.append(bus.text)
+            Route_links.append(link)
+            Route_names.append(route)
+    
+        for type_e in bus_type:
+            Bus_types.append(type_e.text)
+            
+        for dep in departure:
+            Departure.append(dep.text)
+            
+        for arr in arrival:
+            Arrival.append(arr.text)
+            
+        for dur in duration:
+            Duration.append(dur.text)
+            
+        for pr in price:
+            Price.append(pr.text)
+    
+        for ratings in rating:
+            Ratings.append(ratings.text)
+    
+        for seat in seats:
+            Seats_available.append(seat.text)
+            
+    driver.quit()
+    
+    # Return scrapped data as a df
+    return pd.DataFrame({
+        "State": name,
+        "Bus_name": Bus_names,
+        "Bus_type": Bus_types,
+        "Departure": Departure,
+        "Arrival": Arrival,
+        "Duration": Duration,
+        "Price": Price,
+        "Ratings": Ratings,
+        "Seats_Available": Seats_available,
+        "Route_link": Route_links,
+        "Route_name": Route_names
+    })
+                        
+# List of states, URLs and pages to scrape 
+states = [{"name": "Kerala", "url": "https://www.redbus.in/online-booking/ksrtc-kerala/?utm_source=rtchometile", "pages": 2},
+          {"name": "Goa", "url": "https://www.redbus.in/online-booking/ktcl/?utm_source=rtchometile", "pages": 4},
+          {"name": "Rajastan", "url": "https://www.redbus.in/online-booking/rsrtc/?utm_source=rtchometile", "pages":2},
+          {"name": "Uttar Pradesh", "url": "https://www.redbus.in/online-booking/uttar-pradesh-state-road-transport-corporation-upsrtc/?utm_source=rtchometile", "pages":5},
+          {"name": "South Bengal", "url": "https://www.redbus.in/online-booking/south-bengal-state-transport-corporation-sbstc/?utm_source=rtchometile'", "pages":5},
+          {"name": "West Bengal", "url": "https://www.redbus.in/online-booking/wbtc-ctc/?utm_source=rtchometile", "pages":4},
+          {"name": "Assam", "url": "https://www.redbus.in/online-booking/astc/?utm_source=rtchometile", "pages":5},
+          {"name": "Punjab", "url": "https://www.redbus.in/online-booking/pepsu/?utm_source=rtchometile", "pages":2},
+          {"name": "Telangana", "url": "https://www.redbus.in/online-booking/tsrtc/?utm_source=rtchometile", "pages":3},
+          {"name": "Andhra Pradesh", "url": "https://www.redbus.in/online-booking/apsrtc/?utm_source=rtchometile", "pages": 5}
+         ]
+
+# XPATH to find route links and names
+route_xpath = "//a[@class='route']"
+
+# DataFrame to store all the data
+all_data = pd.DataFrame()
+
+# Loop through each state and scrape the data
+for state in states:
+    df = get_route_links_and_names(state["name"], state["url"], state["pages"], route_xpath)
+    all_data = pd.concat([all_data, df], ignore_index=True)
+
+
+# Using regular expression \d+ matches one or more digits
+# The parentheses () create a capture group, extracting only the digit part of the string
+# astype(int) is used to convert the extracted value to an int datatype
+
+all_data['Price'] = all_data['Price'].str.extract(r'(\d+)').astype(int)
+all_data['Price']
+
+
+# str.split() splits each value in the column based on spaces
+# str[0] extracts the 1st element from the split result
+# errors = 'coerce' is used so that the values that cannot be converted into numeric datatype are replaced with NaN (Not a Number) 
+# fillna(0.0) replaces NaN values with 0.0
+# pd.to_numeric converts the extracted string values into numeric datatype
+
+all_data['Ratings'] = pd.to_numeric(all_data['Ratings'].str.split().str[0], errors = 'coerce')
+all_data['Ratings'] = all_data['Ratings'].fillna(0.0)
+all_data['Ratings']
+
+# Using regular expression \d+ matches one or more digits
+# The parentheses () create a capture group, extracting only the digit part of the string
+# astype(int) is used to convert the extracted value to an int datatype
+
+all_data['Seats_Available'] = all_data['Seats_Available'].str.extract(r'(\d+)').astype(int)
+all_data['Seats_Available']
+
+
+# str.replace is used to replace 'h' with ':', 'm' with ':00' and ' ' with ''
+
+all_data['Duration'] = all_data['Duration'].str.replace('h', ':').str.replace('m', ':00').str.replace(' ', '')
+all_data['Duration']
+
+
+# Convert df to csv
+all_data.to_csv('Redbus_data.csv', index = False) 
